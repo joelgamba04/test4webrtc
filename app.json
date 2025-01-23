@@ -30,6 +30,7 @@
         "projectId": "652f3dbe-66da-44b8-9299-498e329623fe"
       }
     },
+    "plugins": ["@config-plugins/react-native-webrtc"],
     "owner": "joelgamba"
   }
 }
