@@ -13,11 +13,19 @@ import {
   mediaDevices,
   RTCPeerConnection,
   RTCIceCandidate,
+  MediaStreamTrack,
 } from "react-native-webrtc";
 
 import io from "socket.io-client";
 
 const SERVER_URL = "http://10.0.48.42:5000";
+const iceServers = {
+  iceServers: [
+    {
+      urls: "stun:stun.l.google.com:19302", // Google's free STUN server
+    },
+  ],
+};
 
 // Ignore warnings (use sparingly)
 LogBox.ignoreLogs(["Warning: ..."]);
@@ -126,10 +134,18 @@ export default function App() {
         console.log("close peer connection before creating a new one");
         peerConnection.current.close();
       }
-      peerConnection.current = new RTCPeerConnection();
+      peerConnection.current = new RTCPeerConnection(iceServers);
+      console.log(
+        "callAllUsers Created peer connection:",
+        peerConnection.current
+      );
 
       // Add local tracks to the connection
       stream.getTracks().forEach((track) => {
+        console.log(
+          "Is track instance of MediaStreamTrack: ",
+          track instanceof MediaStreamTrack
+        );
         try {
           peerConnection.current.addTrack(track, stream);
           console.log("Adding local track:", track);
@@ -149,6 +165,7 @@ export default function App() {
             signalData: offer,
             name: "React Native User",
           });
+          console.log("Offer sent:");
         } catch (error) {
           console.error("Error setting local description:", error);
         }
@@ -194,7 +211,11 @@ export default function App() {
         peerConnection.current.close();
       }
 
-      peerConnection.current = new RTCPeerConnection();
+      peerConnection.current = new RTCPeerConnection(iceServers);
+      console.log(
+        "handleIncomingCall Created peer connection:",
+        peerConnection.current
+      );
 
       // Add local tracks
       stream.getTracks().forEach((track) => {
