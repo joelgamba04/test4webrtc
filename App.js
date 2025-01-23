@@ -162,10 +162,26 @@ export default function App() {
 
     socket.current.on("receiveIceCandidate", (candidate) => {
       console.log("Received ICE candidate:", candidate);
+
+      if (!candidate) {
+        console.warn("Received null ICE Candidate. Ignoring.");
+        return;
+      }
+
+      // Provide fallback values if necessary
+      const fixedCandidate = {
+        ...candidate,
+        sdpMLineIndex: candidate.sdpMLineIndex || 0, // Default to 0 if null
+        sdpMid: candidate.sdpMid || "audio", // Default to "audio" if null
+      };
+
       try {
-        peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(fixedCandidate)
+        );
+        console.log("Successfully added ICE Candidate:", fixedCandidate);
       } catch (error) {
-        console.error("Error adding ICE candidate:", error);
+        console.error("Useeffect() Error adding ICE candidate:", error);
       }
     });
 
@@ -356,12 +372,23 @@ export default function App() {
 
   const handleIceCandidate = ({ candidate, from }) => {
     if (candidate) {
+      // Provide fallback values if necessary
+      const fixedCandidate = {
+        ...candidate,
+        sdpMLineIndex: candidate.sdpMLineIndex || 0, // Default to 0 if null
+        sdpMid: candidate.sdpMid || "audio", // Default to "audio" if null
+      };
+
       try {
-        peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        console.log("ICE candidate added:", candidate);
+        peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(fixedCandidate)
+        );
+        console.log("Successfully added ICE Candidate:", fixedCandidate);
       } catch (error) {
-        console.error("Error adding ICE candidate:", error);
+        console.error("Error adding ICE Candidate:", error);
       }
+    } else {
+      console.warn("ICE candidate is null");
     }
   };
   return (
