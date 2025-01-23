@@ -6,6 +6,8 @@ import {
   LogBox,
   PermissionsAndroid,
   Platform,
+  Alert,
+  Linking,
 } from "react-native";
 
 import {
@@ -14,6 +16,8 @@ import {
   RTCPeerConnection,
   RTCIceCandidate,
   MediaStreamTrack,
+  RTCSessionDescription,
+  registerGlobals,
 } from "react-native-webrtc";
 
 import io from "socket.io-client";
@@ -44,15 +48,22 @@ const requestPermissions = async () => {
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.CAMERA,
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        PermissionsAndroid.PERMISSIONS.INTERNET,
+        PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE,
       ]);
 
       if (
         granted[PermissionsAndroid.PERMISSIONS.CAMERA] !==
           PermissionsAndroid.RESULTS.GRANTED ||
         granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] !==
+          PermissionsAndroid.RESULTS.GRANTED ||
+        granted[PermissionsAndroid.PERMISSIONS.INTERNET] !==
+          PermissionsAndroid.RESULTS.GRANTED ||
+        granted[PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE] !==
           PermissionsAndroid.RESULTS.GRANTED
       ) {
         console.error("Permissions not granted");
+        Alert.alert("Permissions not granted");
         return false;
       }
     } catch (error) {
@@ -63,6 +74,63 @@ const requestPermissions = async () => {
   return true;
 };
 
+const checkAndRequestPermissions = async () => {
+  const permissions = [
+    PermissionsAndroid.PERMISSIONS.CAMERA,
+    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+  ];
+
+  try {
+    // Log permissions being checked
+    permissions.forEach((perm) => console.log("Checking permission:", perm));
+
+    // Check each permission
+    const statuses = await Promise.all(
+      permissions.map((permission) => PermissionsAndroid.check(permission))
+    );
+
+    // If all permissions are granted
+    if (statuses.every((status) => status)) {
+      console.log("All permissions are granted.");
+      return true;
+    }
+
+    console.log("Some permissions are not granted. Requesting...");
+    const granted = await PermissionsAndroid.requestMultiple(permissions);
+
+    // Verify if all requested permissions are granted
+    const allGranted = Object.values(granted).every(
+      (result) => result === PermissionsAndroid.RESULTS.GRANTED
+    );
+
+    if (allGranted) {
+      console.log("Permissions granted after request.");
+      return true;
+    } else {
+      console.error("Some permissions are still denied.");
+      return false;
+    }
+  } catch (error) {
+    console.error("Error requesting permissions:", error);
+    return false;
+  }
+};
+
+const openAppSettings = () => {
+  console.log("Opening app settings...");
+  Alert.alert(
+    "Permissions Required",
+    "You need to enable permissions from the app settings.",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Open Settings",
+        onPress: () => Linking.openSettings(),
+      },
+    ]
+  );
+};
+
 export default function App() {
   const [socketId, setSocketId] = useState(null);
   const [stream, setStream] = useState(null);
@@ -70,6 +138,8 @@ export default function App() {
 
   const socket = useRef(null);
   const peerConnection = useRef(null);
+
+  registerGlobals();
 
   useEffect(() => {
     // Connect to the signaling server
@@ -90,9 +160,13 @@ export default function App() {
       handleCallAccepted(signal);
     });
 
-    socket.current.on("receiveIceCandidate", (data) => {
-      console.log("Received ICE candidate:", data);
-      handleIceCandidate(data);
+    socket.current.on("receiveIceCandidate", (candidate) => {
+      console.log("Received ICE candidate:", candidate);
+      try {
+        peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.error("Error adding ICE candidate:", error);
+      }
     });
 
     return () => {
@@ -102,17 +176,28 @@ export default function App() {
 
   const startLocalStream = async () => {
     console.log("startLocalStream()");
-    const hasPermissions = await requestPermissions();
+    const hasPermissions = await checkAndRequestPermissions();
+    console.log("Permissions check result:", hasPermissions);
+
     if (!hasPermissions) {
+      Alert.alert(
+        "Permissions Required",
+        "Please grant permissions from Settings to use this feature."
+      );
       console.error("Permissions not granted");
+
+      openAppSettings();
       return;
+    } else {
+      console.log("Permissions granted. Proceeding with app initialization...");
     }
 
     try {
       const localStream = await mediaDevices.getUserMedia({
-        video: true,
+        video: { width: 640, height: 480, frameRate: 30 },
         audio: true,
       });
+      console.log("Local stream created:", localStream);
       setStream(localStream);
     } catch (error) {
       console.error("Error accessing media devices:", error);
@@ -173,7 +258,7 @@ export default function App() {
 
       // Listen for ICE candidates
       peerConnection.current.onicecandidate = (event) => {
-        console.log("ICE candidate event:", event);
+        console.log("ICE candidate event:", event.candidate);
         if (event.candidate) {
           console.log("Sending ICE candidate:", event.candidate);
 
