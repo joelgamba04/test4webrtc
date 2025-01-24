@@ -290,6 +290,8 @@ export default function App() {
 
       // Handle remote stream
       peerConnection.current.ontrack = (event) => {
+        console.log("callAllUsers ontrack event triggered:", event.streams);
+
         try {
           console.log("callAllUsers Received remote stream:", event.streams[0]);
           setRemoteStream(event.streams[0]);
@@ -355,6 +357,15 @@ export default function App() {
 
       // Handle remote stream
       peerConnection.current.ontrack = (event) => {
+        console.log(
+          "handleIncomingCall ontrack event triggered:",
+          event.streams
+        );
+
+        if (!event.streams && !event.streams[0]) {
+          console.log("handleIncomingCall No remote stream available");
+        }
+
         try {
           console.log(
             "handleIncomingCall Received remote stream:",
