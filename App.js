@@ -171,9 +171,12 @@ export default function App() {
       // Provide fallback values if necessary
       const fixedCandidate = {
         ...candidate,
-        sdpMLineIndex: candidate.sdpMLineIndex || 0, // Default to 0 if null
-        sdpMid: candidate.sdpMid || "audio", // Default to "audio" if null
+        sdpMLineIndex: candidate.sdpMLineIndex || undefined, // Default to 0 if null
+        sdpMid: candidate.sdpMid || undefined, // Default to "audio" if null
       };
+
+      const addIceCandidate = RTCIceCandidate(fixedCandidate);
+      console.log("Adding ICE candidate:", addIceCandidate);
 
       try {
         peerConnection.current.addIceCandidate(
@@ -288,7 +291,7 @@ export default function App() {
       // Handle remote stream
       peerConnection.current.ontrack = (event) => {
         try {
-          console.log("Received remote stream:", event.streams[0]);
+          console.log("callAllUsers Received remote stream:", event.streams[0]);
           setRemoteStream(event.streams[0]);
         } catch (error) {
           console.error("Error receiving remote stream:", error);
@@ -353,7 +356,10 @@ export default function App() {
       // Handle remote stream
       peerConnection.current.ontrack = (event) => {
         try {
-          console.log("Received remote stream:", event.streams[0]);
+          console.log(
+            "handleIncomingCall Received remote stream:",
+            event.streams[0]
+          );
           setRemoteStream(event.streams[0]);
         } catch (error) {
           console.error("Error receiving remote stream:", error);
