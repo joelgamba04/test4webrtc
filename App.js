@@ -100,7 +100,7 @@ const openAppSettings = () => {
 };
 
 export default function App() {
-  const [socketId, setSocketId] = useState(null);
+  const [socketId, setSocketId] = useState("");
   const [stream, setStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
 
@@ -124,7 +124,7 @@ export default function App() {
     });
 
     socket.current.on("callAccepted", (signal) => {
-      console.log("Call accepted:", signal);
+      // console.log("Call accepted:", signal);
       handleCallAccepted(signal);
     });
 
@@ -184,7 +184,7 @@ export default function App() {
         video: { width: 640, height: 480, frameRate: 30 },
         audio: true,
       });
-      console.log("Local stream created:", localStream);
+      console.log("Local stream created:");
       setStream(localStream);
     } catch (error) {
       console.error("Error accessing media devices:", error);
@@ -235,7 +235,7 @@ export default function App() {
           socket.current.emit("callAllUsers", {
             from: socketId,
             signalData: offer,
-            name: "React Native User",
+            name: "Caller",
           });
           console.log("Offer sent:");
         } catch (error) {
@@ -247,14 +247,16 @@ export default function App() {
       peerConnection.current.onicecandidate = (event) => {
         console.log("ICE candidate event:", event.candidate);
         if (event.candidate) {
-          console.log("Sending ICE candidate:", event.candidate);
+          console.log("Sending ICE candidate: to all : ", event.candidate);
 
           socket.current.emit("sendIceCandidate", {
-            to: socketId,
+            to: "all",
             candidate: event.candidate,
           });
         } else {
-          console.warn("Failed to connect to the server");
+          console.warn(
+            "Failed to connect to the server, event.candidate is null"
+          );
         }
       };
 
@@ -330,28 +332,6 @@ export default function App() {
           console.log("setLocalDescription", error);
         }
       });
-
-      // Handle remote stream
-      peerConnection.current.ontrack = (event) => {
-        console.log(
-          "handleIncomingCall ontrack event triggered:",
-          event.streams
-        );
-
-        if (!event.streams && !event.streams[0]) {
-          console.log("handleIncomingCall No remote stream available");
-        }
-
-        try {
-          console.log(
-            "handleIncomingCall Received remote stream:",
-            event.streams[0]
-          );
-          setRemoteStream(event.streams[0]);
-        } catch (error) {
-          console.error("Error receiving remote stream:", error);
-        }
-      };
     } catch (error) {
       console.error("Error handling incoming call:", error);
     }
@@ -363,27 +343,6 @@ export default function App() {
     );
   };
 
-  const handleIceCandidate = ({ candidate, from }) => {
-    if (candidate) {
-      // Provide fallback values if necessary
-      const fixedCandidate = {
-        ...candidate,
-        sdpMLineIndex: candidate.sdpMLineIndex || 0, // Default to 0 if null
-        sdpMid: candidate.sdpMid || "audio", // Default to "audio" if null
-      };
-
-      try {
-        peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(fixedCandidate)
-        );
-        console.log("Successfully added ICE Candidate:", fixedCandidate);
-      } catch (error) {
-        console.error("Error adding ICE Candidate:", error);
-      }
-    } else {
-      console.warn("ICE candidate is null");
-    }
-  };
   return (
     <View style={styles.container}>
       <View style={styles.videoContainer}>
