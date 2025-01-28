@@ -5,7 +5,6 @@ import {
   StyleSheet,
   LogBox,
   PermissionsAndroid,
-  Platform,
   Alert,
   Linking,
 } from "react-native";
@@ -15,7 +14,6 @@ import {
   mediaDevices,
   RTCPeerConnection,
   RTCIceCandidate,
-  MediaStreamTrack,
   RTCSessionDescription,
   registerGlobals,
 } from "react-native-webrtc";
@@ -99,67 +97,90 @@ const openAppSettings = () => {
   );
 };
 
-export default function App() {
-  const [socketId, setSocketId] = useState("");
-  const [stream, setStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
+const socket = io(SERVER_URL);
 
-  const socket = useRef(null);
-  const peerConnection = useRef(null);
+export default function App() {
+  const [localstream, setLocalStream] = useState(null);
+
+  const [me, setMe] = useState("");
+  const [stream, setStream] = useState(null);
+  const [name, setName] = useState("Caller");
+
+  const userVideo = useRef();
+  const peerConnection = useRef();
 
   registerGlobals();
 
   useEffect(() => {
-    // Connect to the signaling server
-    socket.current = io(SERVER_URL);
+    // Set up socket listeners
+    if (socket) {
+      socket.on("me", (id) => setMe(id));
 
-    socket.current.on("connect", () => {
-      console.log("Connected to signaling server:", socket.current.id);
-      setSocketId(socket.current.id);
-    });
-
-    socket.current.on("callAllUsers", (data) => {
-      console.log("Received callAllUsers:", data);
-      handleIncomingCall(data);
-    });
-
-    socket.current.on("callAccepted", (signal) => {
-      // console.log("Call accepted:", signal);
-      handleCallAccepted(signal);
-    });
-
-    socket.current.on("receiveIceCandidate", (candidate) => {
-      console.log("Received ICE candidate:", candidate);
-
-      if (!candidate) {
-        console.warn("Received null ICE Candidate. Ignoring.");
-        return;
-      }
-
-      // Provide fallback values if necessary
-      const fixedCandidate = {
-        ...candidate,
-        sdpMLineIndex: candidate.sdpMLineIndex || undefined, // Default to 0 if null
-        sdpMid: candidate.sdpMid || undefined, // Default to "audio" if null
-      };
-
-      const addIceCandidate = new RTCIceCandidate(fixedCandidate);
-      console.log("Adding ICE candidate:", addIceCandidate);
-
-      try {
-        peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(fixedCandidate)
+      socket.on("callAccepted", async (signal) => {
+        await peerConnection.current.setRemoteDescription(
+          new RTCSessionDescription(signal)
         );
-        console.log("Successfully added ICE Candidate:", fixedCandidate);
-      } catch (error) {
-        console.error("Useeffect() Error adding ICE candidate:", error);
+        // setCallAccepted(true);
+      });
+
+      socket.on("receiveIceCandidate", ({ candidate }) => {
+        if (candidate) {
+          peerConnection.current.addIceCandidate(
+            new RTCIceCandidate(candidate)
+          );
+        }
+      });
+
+      socket.on("endCall", () => endCall());
+    }
+  }, [socket]);
+
+  const startCall = async () => {
+    if (!stream) {
+      console.log("Local stream is null, cannot call");
+      return;
+    }
+
+    peerConnection.current = new RTCPeerConnection(iceServers);
+
+    // Handle incoming tracks from the remote peer
+    peerConnection.current.ontrack = (event) => {
+      // if (userVideo.current) {
+      console.log("ontrack() RemoteStream: ", event.streams[0]);
+      userVideo.current = event.streams[0];
+      // }0
+    };
+
+    // Handle ICE candidates
+    peerConnection.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("sendIceCandidate", {
+          candidate: event.candidate,
+          to: "all",
+        });
       }
+    };
+
+    stream.getTracks().forEach((track) => {
+      peerConnection.current.addTrack(track, stream);
     });
 
-    return () => {
-      socket.current.disconnect();
-    };
-  }, []);
+    //Create and send the offer
+    const offer = await peerConnection.current.createOffer();
+    await peerConnection.current.setLocalDescription(offer);
+    socket.emit("callAllUsers", { signalData: offer, from: me, name });
+  };
+
+  const endCall = () => {
+    setCallEnded(true);
+    if (peerConnection.current) {
+      peerConnection.current.close();
+    }
+    socket.emit("endCall");
+    if (userVideo.current) {
+      userVideo.current = null;
+    }
+  };
 
   const startLocalStream = async () => {
     console.log("startLocalStream()");
@@ -181,178 +202,29 @@ export default function App() {
 
     try {
       const localStream = await mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, frameRate: 30 },
+        video: true,
         audio: true,
       });
       console.log("Local stream created:");
+      setLocalStream(localStream);
       setStream(localStream);
     } catch (error) {
       console.error("Error accessing media devices:", error);
     }
   };
 
-  const callAllUsers = () => {
-    console.log("callAllUsers() start");
-    try {
-      if (!stream) {
-        console.error("callAllUsers Local stream is not available");
-        return;
-      } else {
-        console.log("callAllUsers Local stream is available");
-      }
-
-      // close peer connection before creating a new one
-      if (peerConnection.current) {
-        console.log("close peer connection before creating a new one");
-        peerConnection.current.close();
-      }
-      peerConnection.current = new RTCPeerConnection(iceServers);
-      console.log(
-        "callAllUsers Created peer connection:",
-        peerConnection.current
-      );
-
-      // Add local tracks to the connection
-      stream.getTracks().forEach((track) => {
-        console.log(
-          "Is track instance of MediaStreamTrack: ",
-          track instanceof MediaStreamTrack
-        );
-        try {
-          peerConnection.current.addTrack(track, stream);
-          console.log("Adding local track:", track);
-        } catch (error) {
-          console.error("Error adding track:", error);
-        }
-      });
-
-      // Create offer
-      peerConnection.current.createOffer().then((offer) => {
-        console.log("Created offer:");
-
-        try {
-          peerConnection.current.setLocalDescription(offer);
-          socket.current.emit("callAllUsers", {
-            from: socketId,
-            signalData: offer,
-            name: "Caller",
-          });
-          console.log("Offer sent:");
-        } catch (error) {
-          console.error("Error setting local description:", error);
-        }
-      });
-
-      // Listen for ICE candidates
-      peerConnection.current.onicecandidate = (event) => {
-        console.log("ICE candidate event:", event.candidate);
-        if (event.candidate) {
-          console.log("Sending ICE candidate: to all : ", event.candidate);
-
-          socket.current.emit("sendIceCandidate", {
-            to: "all",
-            candidate: event.candidate,
-          });
-        } else {
-          console.warn(
-            "Failed to connect to the server, event.candidate is null"
-          );
-        }
-      };
-
-      // Handle remote stream
-      peerConnection.current.ontrack = (event) => {
-        console.log("callAllUsers ontrack event triggered:", event.streams);
-
-        try {
-          console.log("callAllUsers Received remote stream:", event.streams[0]);
-          console.log(
-            "callAllUsers remote stream to url() ",
-            event.streams[0].toURL(),
-            " Localstream to url() ",
-            stream.toURL()
-          );
-          setRemoteStream(event.streams[0]);
-        } catch (error) {
-          console.error("Error receiving remote stream:", error);
-        }
-      };
-    } catch (error) {
-      console.error("Error calling all users:", error);
-    }
-  };
-
-  const handleIncomingCall = (data) => {
-    console.log("handleIncomingCall() start");
-    try {
-      if (!stream) {
-        console.error("handleIncomingCall: Local stream is not available");
-        return;
-      }
-
-      if (peerConnection.current) {
-        console.log("close peer connection before creating a new one");
-        peerConnection.current.close();
-      }
-
-      peerConnection.current = new RTCPeerConnection(iceServers);
-      console.log(
-        "handleIncomingCall Created peer connection:",
-        peerConnection.current
-      );
-
-      // Add local tracks
-      stream.getTracks().forEach((track) => {
-        try {
-          peerConnection.current.addTrack(track, stream);
-          console.log("handleIncomingCall Added local track:", track);
-        } catch (error) {
-          console.error("Error adding track:", error);
-        }
-      });
-
-      console.log("Remote signal data:", data.signalData);
-
-      // Set remote description
-      peerConnection.current.setRemoteDescription(
-        new RTCSessionDescription(data.signalData)
-      );
-
-      // Create answer
-      peerConnection.current.createAnswer().then((answer) => {
-        try {
-          peerConnection.current.setLocalDescription(answer);
-
-          // Send answer back
-          socket.current.emit("answerCall", {
-            to: data.from,
-            signal: answer,
-          });
-        } catch (error) {
-          console.log("setLocalDescription", error);
-        }
-      });
-    } catch (error) {
-      console.error("Error handling incoming call:", error);
-    }
-  };
-
-  const handleCallAccepted = (signal) => {
-    peerConnection.current.setRemoteDescription(
-      new RTCSessionDescription(signal)
-    );
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.videoContainer}>
-        {stream && <RTCView streamURL={stream.toURL()} style={styles.video} />}
-        {remoteStream && (
-          <RTCView streamURL={remoteStream.toURL()} style={styles.video} />
+        {localstream && (
+          <RTCView streamURL={stream.toURL()} style={styles.video} />
+        )}
+        {userVideo.current && (
+          <RTCView streamURL={userVideo.current.toURL()} style={styles.video} />
         )}
       </View>
       <Button title="Start Local Stream" onPress={startLocalStream} />
-      <Button title="Call All Users" onPress={callAllUsers} />
+      <Button title="Call All Users" onPress={startCall} />
     </View>
   );
 }
