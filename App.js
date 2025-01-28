@@ -22,7 +22,7 @@ import {
 
 import io from "socket.io-client";
 
-const SERVER_URL = "http://10.0.48.42:5000";
+const SERVER_URL = "http://10.0.48.32:5000";
 const iceServers = {
   iceServers: [
     {
@@ -41,38 +41,6 @@ const globalErrorHandler = (e, isFatal) => {
 if (global.ErrorUtils) {
   global.ErrorUtils.setGlobalHandler(globalErrorHandler);
 }
-
-const requestPermissions = async () => {
-  if (Platform.OS === "android") {
-    try {
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        PermissionsAndroid.PERMISSIONS.INTERNET,
-        PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE,
-      ]);
-
-      if (
-        granted[PermissionsAndroid.PERMISSIONS.CAMERA] !==
-          PermissionsAndroid.RESULTS.GRANTED ||
-        granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] !==
-          PermissionsAndroid.RESULTS.GRANTED ||
-        granted[PermissionsAndroid.PERMISSIONS.INTERNET] !==
-          PermissionsAndroid.RESULTS.GRANTED ||
-        granted[PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE] !==
-          PermissionsAndroid.RESULTS.GRANTED
-      ) {
-        console.error("Permissions not granted");
-        Alert.alert("Permissions not granted");
-        return false;
-      }
-    } catch (error) {
-      console.error("Error requesting permissions:", error);
-      return false;
-    }
-  }
-  return true;
-};
 
 const checkAndRequestPermissions = async () => {
   const permissions = [
@@ -175,7 +143,7 @@ export default function App() {
         sdpMid: candidate.sdpMid || undefined, // Default to "audio" if null
       };
 
-      const addIceCandidate = RTCIceCandidate(fixedCandidate);
+      const addIceCandidate = new RTCIceCandidate(fixedCandidate);
       console.log("Adding ICE candidate:", addIceCandidate);
 
       try {
@@ -285,6 +253,8 @@ export default function App() {
             to: socketId,
             candidate: event.candidate,
           });
+        } else {
+          console.warn("Failed to connect to the server");
         }
       };
 
@@ -294,6 +264,12 @@ export default function App() {
 
         try {
           console.log("callAllUsers Received remote stream:", event.streams[0]);
+          console.log(
+            "callAllUsers remote stream to url() ",
+            event.streams[0].toURL(),
+            " Localstream to url() ",
+            stream.toURL()
+          );
           setRemoteStream(event.streams[0]);
         } catch (error) {
           console.error("Error receiving remote stream:", error);
