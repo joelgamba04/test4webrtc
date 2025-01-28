@@ -104,6 +104,7 @@ export default function App() {
 
   const [me, setMe] = useState("");
   const [stream, setStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
   const [name, setName] = useState("Caller");
 
   const userVideo = useRef();
@@ -145,10 +146,8 @@ export default function App() {
 
     // Handle incoming tracks from the remote peer
     peerConnection.current.ontrack = (event) => {
-      // if (userVideo.current) {
       console.log("ontrack() RemoteStream: ", event.streams[0]);
-      userVideo.current = event.streams[0];
-      // }0
+      setRemoteStream(event.streams[0]);
     };
 
     // Handle ICE candidates
@@ -177,8 +176,8 @@ export default function App() {
       peerConnection.current.close();
     }
     socket.emit("endCall");
-    if (userVideo.current) {
-      userVideo.current = null;
+    if (remoteStream) {
+      setRemoteStream(null);
     }
   };
 
@@ -219,8 +218,8 @@ export default function App() {
         {localstream && (
           <RTCView streamURL={stream.toURL()} style={styles.video} />
         )}
-        {userVideo.current && (
-          <RTCView streamURL={userVideo.current.toURL()} style={styles.video} />
+        {remoteStream && (
+          <RTCView streamURL={remoteStream.toURL()} style={styles.video} />
         )}
       </View>
       <Button title="Start Local Stream" onPress={startLocalStream} />
