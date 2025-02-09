@@ -20,7 +20,8 @@ import {
 
 import io from "socket.io-client";
 
-const SERVER_URL = "http://10.0.48.32:5000";
+// Local Servel URL
+const SERVER_URL = "https://echat.taguig.gov.ph/";
 const iceServers = {
   iceServers: [
     {
@@ -237,3 +238,4 @@ const styles = StyleSheet.create({
   },
   video: { width: 150, height: 200, backgroundColor: "black" },
 });
+
