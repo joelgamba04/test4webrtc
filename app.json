@@ -2,6 +2,7 @@
   "expo": {
     "name": "test4webrtc",
     "slug": "test4webrtc",
+    "scheme": "test4webrtc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,7 +37,20 @@
         "projectId": "652f3dbe-66da-44b8-9299-498e329623fe"
       }
     },
-    "plugins": ["@config-plugins/react-native-webrtc"],
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ],
+      "@config-plugins/react-native-webrtc"
+    ],
     "owner": "joelgamba"
   }
 }
